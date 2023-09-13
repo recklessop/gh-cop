@@ -1,6 +1,7 @@
 import os
 from github import Github
-from variables import token, org
+from datetime import datetime
+from variables import token, org, IGNORE_LIST
 
 # Initialize GitHub client with your bot's access token
 #token = "YOUR_PERSONAL_ACCESS_TOKEN"
@@ -16,6 +17,7 @@ def check_readme_and_description(repo):
             title="Missing README.md",
             body="This repository is missing a README.md file and/or a description.",
         )
+        print("Creating issue because of missing README.md")
         # Notify contributors about the issue
         notify_contributors(repo, issue)
     else:
@@ -27,6 +29,7 @@ def check_readme_and_description(repo):
                 title="Missing Legal Disclaimer",
                 body="The README.md file does not contain the required legal disclaimer section.",
             )
+            print("Creating issue because of missing Legal Disclaimer in README.md")
             # Notify contributors about the issue
             notify_contributors(repo, issue)
 
@@ -76,10 +79,18 @@ def check_last_contribution(repo):
 
 def notify_contributors(repo, issue):
     """
-    Send a message to all repository contributors about an issue.
+    Assign all repository contributors as assignees to an issue.
     """
-    for contributor in repo.get_contributors():
-        contributor.add_to_issues(issue)
+    collaborators = [c.login for c in repo.get_collaborators()]
+
+    # Get a list of contributors
+    contributors = [contributor.login for contributor in repo.get_contributors()]
+
+    # Filter contributors who are also collaborators
+    assignees = [contributor for contributor in contributors if contributor in collaborators]
+
+    # Assign the contributors as assignees to the issue
+    issue.edit(assignees=assignees)
 
 if __name__ == "__main__":
     # Replace 'YOUR_ORGANIZATION' with the organization or username where your repositories are located.
@@ -90,7 +101,11 @@ if __name__ == "__main__":
             print(f"Skipping archived repository: {repo.full_name}")
             continue
 
+        if repo.name in IGNORE_LIST:
+            print(f"Skipping ignored repository: {repo.full_name}")
+            continue
+
+        print("Working on " + str(repo.full_name))
         check_readme_and_description(repo)
-        readme = repo.get_readme().decoded_content.decode("utf-8")
-        check_legal_disclaimer(readme)
+        check_legal_disclaimer(repo)
         check_last_contribution(repo)
